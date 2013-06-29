@@ -76,7 +76,7 @@ class RCONSocketTest extends PHPUnit_Framework_TestCase {
         $this->assertEquals('test', $reply->getResponse());
     }
 
-    public function testBanned() {
+    public function testConnectionDropped() {
         $this->socketBuilder->setMethods(array('receivePacket'));
         $socket = $this->socketBuilder->getMock();
         $tcpSocket = $this->getMock('TCPSocket');
@@ -84,7 +84,25 @@ class RCONSocketTest extends PHPUnit_Framework_TestCase {
         $socket->socket = $tcpSocket;
         $socket->expects($this->once())->method('receivePacket')->with(4)->will($this->returnValue(0));
 
-        $this->assertEquals(null, $socket->getReply());
+        try {
+            $socket->getReply();
+            $this->fail("No exception thrown.");
+        } catch (Exception $e) {
+            $this->assertInstanceOf('RCONBanException', $e);
+        }
+    }
+
+    public function testConnectionReset() {
+        $this->socketBuilder->setMethods(array('receivePacket'));
+        $socket = $this->socketBuilder->getMock();
+        $socket->expects($this->once())->method('receivePacket')->with(4)->will($this->throwException(new SocketException(SOCKET_ECONNRESET)));
+
+        try {
+            $socket->getReply();
+            $this->fail("No exception thrown.");
+        } catch (Exception $e) {
+            $this->assertInstanceOf('SocketException', $e);
+        }
     }
 
 }
