@@ -22,6 +22,11 @@ require_once STEAM_CONDENSER_PATH . 'exceptions/WebApiException.php';
 class WebApi {
 
     /**
+     * @var Monolog\Logger The Monolog logger for this class
+     */
+    private static $log;
+
+    /**
      * @var string
      */
     private static $apiKey = null;
@@ -43,6 +48,20 @@ class WebApi {
      */
     public static function getApiKey() {
         return self::$apiKey;
+    }
+
+    /**
+     * Returns a raw list of interfaces and their methods that are available in
+     * Steam's Web API
+     *
+     * This can be used for reference when accessing interfaces and methods
+     * that have not yet been implemented by Steam Condenser.
+     *
+     * @return array The list of interfaces and methods
+     */
+    public static function getInterfaces() {
+        $data = self::getJSON('ISteamWebAPIUtil', 'GetSupportedAPIList');
+        return json_decode($data)->apilist->interfaces;
     }
 
     /**
@@ -109,8 +128,9 @@ class WebApi {
      * @return WebApi The internal <var>WebApi</var> instance
      */
     private static function instance() {
-        if(self::$instance == null) {
+        if (self::$instance == null) {
             self::$instance = new WebApi();
+            self::$log = new \Monolog\Logger('WebApi');
         }
 
         return self::$instance;
@@ -197,7 +217,9 @@ class WebApi {
         $url = "$protocol://api.steampowered.com/$interface/$method/v$version/";
 
         $params['format'] = $format;
-        $params['key']    = self::$apiKey;
+        if (self::$apiKey != null) {
+            $params['key'] = self::$apiKey;
+        }
 
         if($params != null && !empty($params)) {
             $url .= '?';
@@ -219,7 +241,7 @@ class WebApi {
      * @throws WebApiException if the request failed
      */
     protected function request($url) {
-        trigger_error("Querying Steam Web API: " . str_replace(self::$apiKey, 'SECRET', $url), E_USER_NOTICE);
+        self::$log->addDebug("Querying Steam Web API: " . str_replace(self::$apiKey, 'SECRET', $url));
 
         $data = @file_get_contents($url);
 

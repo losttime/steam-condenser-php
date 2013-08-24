@@ -3,14 +3,12 @@
  * This code is free software; you can redistribute it and/or modify it under
  * the terms of the new BSD License.
  *
- * Copyright (c) 2008-2012, Sebastian Staudt
+ * Copyright (c) 2008-2013, Sebastian Staudt
  *
  * @license http://www.opensource.org/licenses/bsd-license.php New BSD License
  */
 
 require_once STEAM_CONDENSER_PATH . 'steam/packets/A2M_GET_SERVERS_BATCH2_Packet.php';
-require_once STEAM_CONDENSER_PATH . 'steam/packets/C2M_CHECKMD5_Packet.php';
-require_once STEAM_CONDENSER_PATH . 'steam/packets/S2M_HEARTBEAT2_Packet.php';
 require_once STEAM_CONDENSER_PATH . 'steam/servers/Server.php';
 require_once STEAM_CONDENSER_PATH . 'steam/sockets/MasterServerSocket.php';
 
@@ -29,9 +27,14 @@ require_once STEAM_CONDENSER_PATH . 'steam/sockets/MasterServerSocket.php';
 class MasterServer extends Server {
 
     /**
+     * @var Monolog\Logger The Monolog logger for this class
+     */
+    private static $log;
+
+    /**
      * @var string The master server address to query for GoldSrc game servers
      */
-    const GOLDSRC_MASTER_SERVER = 'hl1master.steampowered.com:27010';
+    const GOLDSRC_MASTER_SERVER = 'hl1master.steampowered.com:27011';
 
     /**
      * @var string The master server address to query for GoldSrc game servers
@@ -94,6 +97,23 @@ class MasterServer extends Server {
     protected $socket;
 
     /**
+     * Creates a new master server instance with the given address and port
+     *
+     * @param string $address Either an IP address, a DNS name or one of them
+     *        combined with the port number. If a port number is given, e.g.
+     *        'server.example.com:27016' it will override the second argument.
+     * @param int $port The port the server is listening on
+     * @throws SteamCondenserException if an host name cannot be resolved
+     */
+    public function __construct($address, $port = null) {
+        parent::__construct($address, $port);
+
+        if (!isset(self::$log)) {
+            self::$log = new \Monolog\Logger('MasterServer');
+        }
+    }
+
+    /**
      * Sets the number of consecutive requests that may fail, before getting
      * the server list is cancelled (default: 3)
      *
@@ -101,34 +121,6 @@ class MasterServer extends Server {
      */
     public static function setRetries($retries) {
         self::$retries = $retries;
-    }
-
-    /**
-     * Request a challenge number from the master server.
-     *
-     * This is used for further communication with the master server.
-     *
-     * Please note that this is <b>not</b> needed for finding servers using
-     * {@link getServers()}.
-     *
-     * @deprecated
-     * @return int The challenge number returned from the master server
-     * @see sendHeartbeat()
-     * @throws SteamCondenserException if a problem occurs while parsing the
-     *         reply
-     * @throws TimeoutException if the request times out
-     */
-    public function getChallenge() {
-        while(true) {
-            try {
-                $this->socket->send(new C2M_CHECKMD5_Packet());
-                return $this->socket->getReply()->getChallenge();
-            } catch(Exception $e) {
-                if($this->rotateIp()) {
-                    throw $e;
-                }
-            }
-        }
     }
 
     /**
@@ -202,7 +194,7 @@ class MasterServer extends Server {
                         if($failCount == self::$retries) {
                             throw $e;
                         }
-                        trigger_error("Request to master server {$this->ipAddress} timed out, retrying...");
+                        self::$log->addInfo("Request to master server {$this->ipAddress} timed out, retrying...");
                     }
                 } while(!$finished);
                 break;
@@ -212,7 +204,7 @@ class MasterServer extends Server {
                 } else if($this->rotateIp()) {
                     throw $e;
                 }
-                trigger_error("Request to master server failed, retrying {$this->ipAddress}...");
+                self::$log->addInfo("Request to master server failed, retrying {$this->ipAddress}...");
             }
         }
 
@@ -226,41 +218,6 @@ class MasterServer extends Server {
      */
     public function initSocket() {
         $this->socket = new MasterServerSocket($this->ipAddress, $this->port);
-    }
-
-    /**
-     * Sends a constructed heartbeat to the master server
-     *
-     * This can be used to check server versions externally.
-     *
-     * @deprecated
-     * @param array $data The heartbeat data to send to the master server
-     * @return array The reply from the master server – usually zero or more
-     *         packets. Zero means either the heartbeat was accepted by the
-     *         master or there was a timeout. So usually it's best to repeat a
-     *         heartbeat a few times when not receiving any packets.
-     * @throws SteamCondenserException if heartbeat data is missing the
-     *         challenge number or the reply cannot be parsed
-     */
-    public function sendHeartbeat($data) {
-        while(true) {
-            try {
-                $this->socket->send(new S2M_HEARTBEAT2_Packet($data));
-
-                $replyPackets = array();
-                try {
-                    do {
-                        $replyPackets[] = $this->socket->getReply();
-                    } while(true);
-                } catch(TimeoutException $e) {}
-
-                return $replyPackets;
-            } catch(Exception $e) {
-                if($this->rotateIp()) {
-                    throw $e;
-                }
-            }
-        }
     }
 
 }

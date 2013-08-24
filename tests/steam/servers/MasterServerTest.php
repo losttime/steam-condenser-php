@@ -28,13 +28,11 @@ class MasterServerTest extends PHPUnit_Framework_TestCase {
         $this->server = $this->getMockBuilder('TestableMasterServer')->disableOriginalConstructor()->setMethods(array('rotateIp'))->getMock();
 
         $this->server->socket = $this->socket;
-    }
 
-    public function testGetChallenge() {
-        $this->socket->expects($this->once())->method('send')->with($this->isInstanceOf('C2M_CHECKMD5_Packet'));
-        $this->socket->expects($this->once())->method('getReply')->will($this->returnValue(new M2C_ISVALIDMD5_Packet("\0\xFF\0\0\0")));
-
-        $this->assertEquals(255, $this->server->getChallenge());
+        $log = new \ReflectionProperty('MasterServer', 'log');
+        $log->setAccessible(true);
+        $log->setValue(new \Monolog\Logger('MasterServer'));
+        $log->getValue()->pushHandler(new \Monolog\Handler\NullHandler());
     }
 
     public function testGetServers() {
@@ -98,17 +96,6 @@ class MasterServerTest extends PHPUnit_Framework_TestCase {
         $this->socket->expects($this->at(9))->method('getReply')->will($this->returnValue(new M2A_SERVER_BATCH_Packet("\xA\x7F\0\0\x2\x69\x87\x7F\0\0\x2\x69\x88\0\0\0\0\0\0")));
 
         $this->assertEquals(array(array('127.0.0.1', 27015), array('127.0.0.1', 27016), array('127.0.0.2', 27015), array('127.0.0.2', 27016)), $this->server->getServers());
-    }
-
-    public function testSendHeartbeat() {
-        $reply1 = 'reply1';
-        $reply2 = 'reply2';
-        $this->socket->expects($this->once())->method('send')->with($this->isInstanceOf('S2M_HEARTBEAT2_Packet'));
-        $this->socket->expects($this->at(1))->method('getReply')->will($this->returnValue($reply1));
-        $this->socket->expects($this->at(2))->method('getReply')->will($this->returnValue($reply2));
-        $this->socket->expects($this->at(3))->method('getReply')->will($this->throwException(new TimeoutException()));
-
-        $this->assertEquals(array($reply1, $reply2), $this->server->sendHeartbeat(array('challenge' => 1)));
     }
 
     public function testSetRetries() {
