@@ -159,7 +159,7 @@ class SourceServer extends GameServer {
             }
 
             $response[] = $responsePacket->getResponse();
-        } while(sizeof($response) < 3 || strlen($responsePacket->getResponse()) > 0);
+        } while(strlen($responsePacket->getResponse()) > 0);
 
         return trim(join('', $response));
     }
